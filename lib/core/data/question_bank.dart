@@ -166,17 +166,34 @@ class QuestionEngine {
       if (topics.isEmpty) continue;
 
       for (int i = 0; i < count; i++) {
-        late DynamicQuestion question;
-        for (var paperAttempt = 0; paperAttempt < 20; paperAttempt++) {
+        DynamicQuestion? question;
+        final maximumAttempts = max(100, topics.length * 12);
+        for (var paperAttempt = 0;
+            paperAttempt < maximumAttempts;
+            paperAttempt++) {
           final topic = _weightedTopicSelection(topics);
-          question = _generateUnseenQuestion(
-            topic,
-            type,
-            usedIds,
-            unavailableTexts,
-            difficulty: effectiveDifficulty,
+          try {
+            final candidate = _generateUnseenQuestion(
+              topic,
+              type,
+              usedIds,
+              unavailableTexts,
+              difficulty: effectiveDifficulty,
+            );
+            if (!unavailableTexts.contains(candidate.text)) {
+              question = candidate;
+              break;
+            }
+          } on StateError {
+            // This topic's finite conceptual variants are exhausted. Select a
+            // different syllabus topic rather than aborting the whole paper.
+          }
+        }
+        if (question == null) {
+          throw StateError(
+            'Unique ${subject.name} question pool exhausted after '
+            '$maximumAttempts attempts.',
           );
-          if (!unavailableTexts.contains(question.text)) break;
         }
         questions.add(question);
         unavailableTexts.add(question.text);

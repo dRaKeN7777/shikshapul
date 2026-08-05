@@ -484,20 +484,24 @@ class _MockExamScreenState extends State<MockExamScreen> {
                   ],
                 ),
               ),
-            Container(
-              margin: const EdgeInsets.only(right: 16),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: const Color(0xFF38BDF8).withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: const Color(0xFF38BDF8)),
-              ),
-              child: Text(
-                _controller!.formattedTime,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF38BDF8),
+            ValueListenableBuilder<int>(
+              valueListenable: _controller!.remainingSecondsListenable,
+              builder: (context, remaining, child) => Container(
+                margin: const EdgeInsets.only(right: 16),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF38BDF8).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFF38BDF8)),
+                ),
+                child: Text(
+                  _controller!.formattedTime,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF38BDF8),
+                  ),
                 ),
               ),
             ),

@@ -5,7 +5,7 @@
 
 import 'dart:async';
 import 'dart:math';
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import '../../models/exam_models.dart';
 import '../data/question_bank.dart';
 import '../database/database_helper.dart';
@@ -32,6 +32,7 @@ class ExamController extends ChangeNotifier {
   int _violationCount = 0;
   Timer? _timer;
   int _remainingSeconds = 0;
+  final ValueNotifier<int> _remainingSecondsNotifier = ValueNotifier<int>(0);
   int _questionStartTime = 0;
   Future<ExamSession>? _finishFuture;
   int _adaptiveLevel = 1;
@@ -73,6 +74,8 @@ class ExamController extends ChangeNotifier {
 
   /// NEW: remaining seconds for timer warnings
   int get remainingSeconds => _remainingSeconds;
+  ValueListenable<int> get remainingSecondsListenable =>
+      _remainingSecondsNotifier;
 
   DynamicQuestion? get currentQuestion =>
       _isActive && _currentIndex < _questions.length
@@ -134,12 +137,16 @@ class ExamController extends ChangeNotifier {
     _remainingSeconds =
         (_durationMinutes ?? ExamSession.getProfile(_type).durationMinutes) *
             60;
+    _remainingSecondsNotifier.value = _remainingSeconds;
     _questionStartTime = DateTime.now().millisecondsSinceEpoch;
 
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (_remainingSeconds > 0) {
         _remainingSeconds--;
-        notifyListeners();
+        // Repaint only the timer instead of rebuilding every exam question,
+        // option card and explanation once per second.
+        _remainingSecondsNotifier.value = _remainingSeconds;
+        if (_remainingSeconds == 0) _endExam();
       } else {
         _endExam();
       }
@@ -400,6 +407,7 @@ class ExamController extends ChangeNotifier {
   @override
   void dispose() {
     _timer?.cancel();
+    _remainingSecondsNotifier.dispose();
     super.dispose();
   }
 }

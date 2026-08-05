@@ -33,7 +33,11 @@ class _AiTutorScreenState extends State<AiTutorScreen>
   String? _currentTopicId;
   String _searchQuery = '';
   bool _showSearch = false;
-  bool? _modelLoaded;
+  bool _modelLoading = false;
+  bool _modelAttempted = false;
+  bool _modelLoaded = false;
+  bool _advancedAvailable = true;
+  String _modelError = '';
 
   late final AnimationController _typingController;
 
@@ -53,7 +57,9 @@ class _AiTutorScreenState extends State<AiTutorScreen>
     )..repeat();
 
     _addWelcomeMessage();
-    _prepareAi();
+    _modelLoaded = ShikshaPulSwarm.instance.isRealModelLoaded;
+    _modelAttempted = _modelLoaded;
+    unawaited(_checkDeviceMode());
 
     if (widget.initialQuery != null) {
       Future.delayed(const Duration(milliseconds: 500), () {
@@ -62,11 +68,37 @@ class _AiTutorScreenState extends State<AiTutorScreen>
     }
   }
 
-  Future<void> _prepareAi() async {
-    await ShikshaPulSwarm.instance.initializeBaseModel();
+  Future<void> _enableAdvancedAi() async {
+    if (_modelLoading || _modelLoaded || !_advancedAvailable) return;
+    setState(() {
+      _modelLoading = true;
+      _modelAttempted = true;
+      _modelError = '';
+    });
+    try {
+      await ShikshaPulSwarm.instance.initializeBaseModel();
+    } catch (error) {
+      _modelError = '$error';
+    }
     if (!mounted) return;
     setState(() {
+      _modelLoading = false;
       _modelLoaded = ShikshaPulSwarm.instance.isRealModelLoaded;
+      if (!_modelLoaded && _modelError.isEmpty) {
+        _modelError = ShikshaPulSwarm.instance.modelError;
+      }
+    });
+  }
+
+  Future<void> _checkDeviceMode() async {
+    final supported =
+        await ShikshaPulSwarm.instance.checkAdvancedModelSupport();
+    if (!mounted) return;
+    setState(() {
+      _advancedAvailable = supported;
+      if (!supported) {
+        _modelError = ShikshaPulSwarm.instance.modelError;
+      }
     });
   }
 
@@ -78,7 +110,7 @@ class _AiTutorScreenState extends State<AiTutorScreen>
 
 I can help you with:
 • 📚 Concept explanations with formulas
-• 🔢 Step-by-step worked examples  
+• 🔢 Step-by-step worked examples
 • 📝 Practice question generation
 • 📊 Weak topic analysis
 
@@ -107,6 +139,7 @@ What would you like to learn today?""",
 
     setState(() {
       _messages.add(userMsg);
+      _trimUiMessages();
       _isTyping = true;
       _textController.clear();
     });
@@ -128,6 +161,7 @@ What would you like to learn today?""",
           } else {
             _messages.add(aiMsg);
           }
+          _trimUiMessages();
           _isTyping = aiMsg.isStreaming;
         });
         _scrollToBottom();
@@ -149,8 +183,20 @@ What would you like to learn today?""",
       timestamp: DateTime.now(),
       subject: _currentSubject,
     );
-    setState(() => _messages.add(msg));
+    setState(() {
+      _messages.add(msg);
+      _trimUiMessages();
+    });
     _scrollToBottom();
+  }
+
+  void _trimUiMessages() {
+    const maximumMessages = 60;
+    if (_messages.length <= maximumMessages) return;
+    final preserveWelcome = _messages.first.id == 'welcome';
+    final removeFrom = preserveWelcome ? 1 : 0;
+    final removeCount = _messages.length - maximumMessages;
+    _messages.removeRange(removeFrom, removeFrom + removeCount);
   }
 
   void _scrollToBottom() {
@@ -304,10 +350,13 @@ What would you like to learn today?""",
   }
 
   Widget _buildEngineStatus() {
-    final loading = _modelLoaded == null;
-    final active = _modelLoaded == true;
-    final color =
-        loading || active ? const Color(0xFFF59E0B) : const Color(0xFF38BDF8);
+    final active = _modelLoaded;
+    final failed = _modelAttempted && !_modelLoading && !active;
+    final color = active
+        ? const Color(0xFF10B981)
+        : _modelLoading
+            ? const Color(0xFFF59E0B)
+            : const Color(0xFF38BDF8);
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 6),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
@@ -318,29 +367,52 @@ What would you like to learn today?""",
       ),
       child: Row(
         children: [
-          if (loading)
+          if (_modelLoading)
             SizedBox(
               width: 13,
               height: 13,
               child: CircularProgressIndicator(strokeWidth: 2, color: color),
             )
           else
-            Icon(active ? Icons.memory : Icons.offline_bolt,
+            Icon(active ? Icons.memory : Icons.shield_outlined,
                 size: 15, color: color),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              loading
-                  ? 'Preparing offline Qwen tutor… first launch may take a minute'
+              _modelLoading
+                  ? 'Checking memory and preparing local AI…'
                   : active
-                      ? 'Local Qwen active • study aid, verify important answers'
-                      : 'Offline syllabus tutor active • Qwen unavailable on this device',
+                      ? 'Advanced local AI active • verify important answers'
+                      : !_advancedAvailable
+                          ? 'Lite Tutor active • optimized for low-memory phones'
+                          : failed
+                              ? 'Safe tutor active • local model unavailable${_modelError.isEmpty ? '' : ': ${_shortModelError()}'}'
+                              : 'Safe tutor ready • advanced model is optional',
               style: TextStyle(color: color, fontSize: 11),
             ),
           ),
+          if (!active && !_modelLoading && _advancedAvailable) ...[
+            const SizedBox(width: 6),
+            TextButton(
+              onPressed: _enableAdvancedAi,
+              style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+              ),
+              child: Text(failed ? 'RETRY' : 'ENABLE'),
+            ),
+          ],
         ],
       ),
     );
+  }
+
+  String _shortModelError() {
+    final error = _modelError
+        .replaceFirst('Failed to load model: ', '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    return error.length <= 70 ? error : '${error.substring(0, 67)}…';
   }
 
   Widget _buildSearchBar() {
@@ -685,6 +757,8 @@ What would you like to learn today?""",
 
   Widget _buildQuickActions() {
     final allActions = [
+      _QuickAction("7-Day Study Plan"),
+      _QuickAction("Exam Strategy"),
       _QuickAction("Explain Kinematics", "PHYS_KIN"),
       _QuickAction("Newton's Laws", "PHYS_NLM"),
       _QuickAction("Integration", "MATH_INT"),
@@ -693,7 +767,9 @@ What would you like to learn today?""",
     ];
     final courseSubjects = widget.course.subjectDistribution.keys.toSet();
     final actions = allActions.where((action) {
-      final topic = SyllabusTree.findTopicById(action.topicId);
+      final topicId = action.topicId;
+      if (topicId == null) return true;
+      final topic = SyllabusTree.findTopicById(topicId);
       return topic != null && courseSubjects.contains(topic.subjectDomain);
     }).toList();
 
@@ -716,7 +792,9 @@ What would you like to learn today?""",
                   ),
                 ),
                 onPressed: () {
-                  final topic = SyllabusTree.findTopicById(a.topicId);
+                  final topic = a.topicId == null
+                      ? null
+                      : SyllabusTree.findTopicById(a.topicId!);
                   if (topic != null) {
                     setState(() {
                       _currentSubject = topic.subjectDomain;
@@ -919,7 +997,7 @@ Want me to solve any of these step by step? Just say "Solve Q1" or "Explain Q3"!
 
   @override
   void dispose() {
-    ShikshaPulSwarm.instance.stopGeneration();
+    unawaited(ShikshaPulSwarm.instance.releaseModel());
     _typingController.dispose();
     _textController.dispose();
     _scrollController.dispose();
@@ -929,8 +1007,8 @@ Want me to solve any of these step by step? Just say "Solve Q1" or "Explain Q3"!
 
 class _QuickAction {
   final String label;
-  final String topicId;
-  _QuickAction(this.label, this.topicId);
+  final String? topicId;
+  _QuickAction(this.label, [this.topicId]);
 }
 
 class _ConceptPainter extends CustomPainter {

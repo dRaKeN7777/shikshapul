@@ -2,8 +2,9 @@
 
 Offline-first Flutter app for Android and iOS that prepares students for Nepal
 engineering and medical entrance examinations. It includes course-specific
-exam practice, weakness analytics, animated concept visualizers, and an
-on-device Qwen GGUF tutor.
+exam practice, weakness analytics, animated concept visualizers, and a
+low-memory offline tutor. An on-device Qwen GGUF edition is optional on
+supported higher-memory Android phones.
 
 The product distinguishes generated practice, syllabus-based practice,
 expert-authored questions, and licensed past papers in the UI. Generated
@@ -19,8 +20,9 @@ the Mistake Notebook.
 - Flutter 3.44 or newer (Dart 3.3+)
 - Android: SDK 36, Java 17, and Android 8.0/API 26 or newer
 - iOS: Xcode 16 or newer and iOS 13 or newer
-- A physical ARM64 Android or iOS device for native Qwen inference
-- About 1 GB free storage on first AI Tutor launch
+- A physical ARM64 Android device for the optional Full-AI edition
+- Lite edition: no 412 MB model download or extraction
+- Full-AI edition: about 1 GB free storage and at least 1.4 GB currently free RAM
 
 ## Run
 
@@ -28,22 +30,27 @@ the Mistake Notebook.
 flutter pub get
 flutter analyze
 flutter test
-flutter run
+flutter run --flavor lite
 ```
 
-Build an installable development APK with `flutter build apk --debug`. The
-output is `build/app/outputs/flutter-apk/app-debug.apk`.
+Build the low-memory development APK with
+`flutter build apk --debug --flavor lite`. The output is
+`build/app/outputs/flutter-apk/app-lite-debug.apk`.
 
 Release builds require a private keystore. Create `android/key.properties`
 with `storePassword`, `keyPassword`, `keyAlias`, and `storeFile`. The build now
 fails instead of producing an invalid unsigned release APK when signing is not
 configured.
 
-For Google Play, publish a signed Android App Bundle with
-`flutter build appbundle --release`. The bundled offline model makes the
-download large; validate the compressed size in Play Console and move it to
-Play Asset Delivery if the final evaluated model pushes the base module beyond
-the current store limit or materially hurts install conversion.
+The recommended release is `flutter build apk --release --flavor lite`, or run
+`./build_latest_release.sh` for formatting, analysis, tests, signing,
+certificate verification, and SHA-256 generation. It contains the complete
+exam simulator and Lite Tutor without the large model.
+
+Build the separately installable high-memory edition with
+`flutter build apk --release --flavor full`, or run
+`./build_full_ai_release.sh`. For Google Play, build the corresponding signed
+bundle with `flutter build appbundle --release --flavor lite`.
 
 Build an unsigned iOS archive with `flutter build ios --release --no-codesign`.
 For App Store or device distribution, open `ios/Runner.xcworkspace` in Xcode,
@@ -55,11 +62,23 @@ select your Apple development team, and create an Archive.
   reproduced or certified official past papers.
 - Scholarship/readiness indicators are personal study signals, not official
   ranks, admissions decisions, or scholarship guarantees.
-- The AI model runs locally on supported Android and iOS devices. If native
-  inference cannot start, the tutor automatically uses its offline syllabus
-  knowledge engine.
-- Android extracts the large GGUF through a native background stream and checks
-  its SHA-256, avoiding a 400+ MB Dart-memory spike during first launch.
+- Lite Tutor runs locally without a generative model or network connection. If
+  optional native inference cannot start, the tutor stays usable through its
+  offline syllabus knowledge engine.
+- Only the Full-AI Android flavor contains the GGUF. Android extracts it through
+  a native background stream and checks its SHA-256, avoiding a 400+ MB
+  Dart-memory spike during first launch.
+- Opening AI Tutor never auto-loads the native model. The verified local
+  syllabus tutor is immediately available; Advanced AI is opt-in, checks for
+  at least 1.4 GB free RAM, uses stable CPU inference on Android, and unloads
+  when the tutor closes. Low-memory/model failures remain inside the safe tutor
+  instead of crashing the app.
+- Android's native low-RAM classification and total/available-memory checks run
+  before model extraction. Phones with roughly 1 GB RAM stay in Lite Tutor:
+  formulas, worked explanations, generated practice, exam strategy, and study
+  plans remain available without allocating llama or copying the model.
+- Exam countdowns repaint only the timer; question cards and explanations are
+  not rebuilt every second, reducing CPU and battery use on entry-level phones.
 - Configure a private Android release keystore and Apple signing team before
   publishing. Release artifacts are intentionally not signed with debug keys.
 - Exam blueprints carry a source version and verification state. KU KUCAT 2026

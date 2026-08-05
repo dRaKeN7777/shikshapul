@@ -39,6 +39,7 @@ class _RealExamScreenState extends State<RealExamScreen>
     WidgetsBinding.instance.addObserver(this);
     _controller = ExamController(widget.course.type, mode: ExamMode.real);
     _controller.addListener(_onUpdate);
+    _controller.remainingSecondsListenable.addListener(_onTimerUpdate);
     _buildSubjectSections();
   }
 
@@ -67,6 +68,7 @@ class _RealExamScreenState extends State<RealExamScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _controller.remainingSecondsListenable.removeListener(_onTimerUpdate);
     _controller.removeListener(_onUpdate);
     _controller.dispose();
     super.dispose();
@@ -119,6 +121,11 @@ class _RealExamScreenState extends State<RealExamScreen>
       }
     }
 
+    setState(() {});
+  }
+
+  void _onTimerUpdate() {
+    if (!mounted) return;
     final remaining = _controller.remainingSeconds;
     if (remaining <= 600 && remaining > 590 && !_warned10Min) {
       _warned10Min = true;
@@ -132,8 +139,6 @@ class _RealExamScreenState extends State<RealExamScreen>
       _warned1Min = true;
       _showTimeWarning("1 MINUTE REMAINING!");
     }
-
-    setState(() {});
   }
 
   void _showWarningDialog() {
@@ -340,28 +345,32 @@ class _RealExamScreenState extends State<RealExamScreen>
                 ],
               ),
             ),
-            Container(
-              margin: const EdgeInsets.only(right: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: _controller.remainingSeconds <= 60
-                    ? const Color(0xFFEF4444).withValues(alpha: 0.2)
-                    : const Color(0xFFF59E0B).withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: _controller.remainingSeconds <= 60
-                      ? const Color(0xFFEF4444)
-                      : const Color(0xFFF59E0B),
+            ValueListenableBuilder<int>(
+              valueListenable: _controller.remainingSecondsListenable,
+              builder: (context, remaining, child) => Container(
+                margin: const EdgeInsets.only(right: 8),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: remaining <= 60
+                      ? const Color(0xFFEF4444).withValues(alpha: 0.2)
+                      : const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: remaining <= 60
+                        ? const Color(0xFFEF4444)
+                        : const Color(0xFFF59E0B),
+                  ),
                 ),
-              ),
-              child: Text(
-                _controller.formattedTime,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: _controller.remainingSeconds <= 60
-                      ? const Color(0xFFEF4444)
-                      : const Color(0xFFF59E0B),
+                child: Text(
+                  _controller.formattedTime,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: remaining <= 60
+                        ? const Color(0xFFEF4444)
+                        : const Color(0xFFF59E0B),
+                  ),
                 ),
               ),
             ),

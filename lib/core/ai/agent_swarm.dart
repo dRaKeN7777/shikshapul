@@ -7,8 +7,8 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:llama_flutter_android/llama_flutter_android.dart';
-import 'package:path_provider/path_provider.dart';
 import '../../models/exam_models.dart';
+import '../data/question_bank.dart';
 import '../data/syllabus_tree.dart';
 
 // ================================================================
@@ -57,6 +57,23 @@ class FormulaCard {
   FormulaCard({required this.name, required this.formula, this.description});
 }
 
+class AiMemoryPolicy {
+  static const minimumFreeBytes = 1400 * 1024 * 1024;
+  static const minimumTotalBytes = 2200 * 1024 * 1024;
+
+  static bool supportsAdvancedModel({
+    required int availableBytes,
+    required int totalBytes,
+    required bool lowMemory,
+    required bool lowRamDevice,
+  }) {
+    if (lowMemory || lowRamDevice) return false;
+    if (totalBytes > 0 && totalBytes < minimumTotalBytes) return false;
+    if (availableBytes > 0 && availableBytes < minimumFreeBytes) return false;
+    return true;
+  }
+}
+
 // ================================================================
 //  LOCAL LLAMA ENGINE (GGUF) — REAL IMPLEMENTATION
 // ================================================================
@@ -77,54 +94,71 @@ class LocalLlamaEngine {
   bool get isLoaded => _isLoaded;
   String get lastError => _lastError;
 
-  Future<bool> loadModel(String assetPath) async {
+  Future<bool> supportsAdvancedModel() async {
+    if (Platform.isIOS) {
+      _lastError =
+          'This build uses Lite Tutor; the Full AI model pack is Android-only';
+      return false;
+    }
+    if (!Platform.isAndroid) {
+      _lastError = 'Advanced local AI is available only on mobile devices';
+      return false;
+    }
     try {
-      if (!Platform.isAndroid && !Platform.isIOS) {
+      final capacity = await _modelAssets.invokeMapMethod<String, dynamic>(
+        'deviceCapacity',
+      );
+      final available = capacity?['availableBytes'] as int? ?? -1;
+      final total = capacity?['totalBytes'] as int? ?? -1;
+      final lowMemory = capacity?['lowMemory'] as bool? ?? false;
+      final lowRamDevice = capacity?['lowRamDevice'] as bool? ?? false;
+      final modelBundled = capacity?['modelBundled'] as bool? ?? false;
+      if (!modelBundled) {
         _lastError =
-            'Local Qwen inference is available on Android and iOS devices';
+            'Lite Tutor is active; install the optional Full AI edition on a high-memory phone';
         return false;
       }
-      if (Platform.isAndroid) {
-        // Native streaming avoids holding the complete 400+ MB model in Dart
-        // memory. The Android side also verifies SHA-256 before llama loads it.
-        final modelPath = await _modelAssets.invokeMethod<String>(
-          'prepareModel',
-          {'assetPath': assetPath, 'sha256': _bundledModelSha256},
-        );
-        if (modelPath == null || modelPath.isEmpty) {
-          throw const FileSystemException('Native model extraction failed');
-        }
-        return await _loadController(modelPath);
+      if (!AiMemoryPolicy.supportsAdvancedModel(
+        availableBytes: available,
+        totalBytes: total,
+        lowMemory: lowMemory,
+        lowRamDevice: lowRamDevice,
+      )) {
+        _lastError =
+            'Lite Tutor mode is active to protect this low-memory device';
+        return false;
       }
+      return true;
+    } catch (error) {
+      _lastError = 'Could not safely verify memory capacity: $error';
+      return false;
+    }
+  }
 
-      // iOS fallback: keep the extracted model in application support so it is
-      // not purged and recopied on every launch.
-      final supportDir = await getApplicationSupportDirectory();
-      final fileName = assetPath.split('/').last;
-      final modelPath = '${supportDir.path}/$fileName';
-
-      final file = File(modelPath);
-      final byteData = await rootBundle.load(assetPath);
-      final expectedLength = byteData.lengthInBytes;
-      if (!await file.exists() || await file.length() != expectedLength) {
-        debugPrint('[ShikshaPul AI] Extracting model from assets → $modelPath');
-        if (await file.exists()) await file.delete();
-        final partial = File('$modelPath.part');
-        if (await partial.exists()) await partial.delete();
-        await partial.writeAsBytes(byteData.buffer.asUint8List(), flush: true);
-        if (await partial.length() != expectedLength) {
-          await partial.delete();
-          throw const FileSystemException('Incomplete model extraction');
-        }
-        await partial.rename(modelPath);
-        debugPrint(
-            '[ShikshaPul AI] Model extracted: ${await file.length()} bytes');
+  Future<bool> loadModel(String assetPath) async {
+    try {
+      if (!Platform.isAndroid) {
+        _lastError = 'Advanced local Qwen inference is Android-only';
+        return false;
       }
-
+      if (!await supportsAdvancedModel()) return false;
+      // Native streaming avoids holding the complete 400+ MB model in Dart
+      // memory. The Android side also verifies SHA-256 before llama loads it.
+      final modelPath = await _modelAssets.invokeMethod<String>(
+        'prepareModel',
+        {'assetPath': assetPath, 'sha256': _bundledModelSha256},
+      );
+      if (modelPath == null || modelPath.isEmpty) {
+        throw const FileSystemException('Native model extraction failed');
+      }
       return await _loadController(modelPath);
     } catch (e, st) {
       _lastError = 'Failed to load model: $e';
       _isLoaded = false;
+      try {
+        await _controller?.dispose();
+      } catch (_) {}
+      _controller = null;
       debugPrint('[ShikshaPul AI] ERROR: $_lastError');
       debugPrint('$st');
       return false;
@@ -137,18 +171,31 @@ class LocalLlamaEngine {
     if (Platform.isAndroid) {
       try {
         final gpu = await _controller!.detectGpu();
-        gpuLayers = gpu.recommendedGpuLayers;
+        if (gpu.freeRamBytes > 0 &&
+            gpu.freeRamBytes < AiMemoryPolicy.minimumFreeBytes) {
+          final availableMb = gpu.freeRamBytes ~/ (1024 * 1024);
+          throw StateError(
+            'Advanced model needs about 1.4 GB free RAM; '
+            '$availableMb MB is currently available',
+          );
+        }
+        // Vulkan driver failures can terminate Android before Dart receives an
+        // exception. CPU inference is slower but stable across older devices.
+        gpuLayers = 0;
         debugPrint(
-          '[ShikshaPul AI] ${gpu.gpuName}: $gpuLayers GPU layers',
+          '[ShikshaPul AI] ${gpu.gpuName}: ${gpu.freeRamBytes} bytes free; '
+          'safe CPU mode',
         );
+      } on StateError {
+        rethrow;
       } catch (error) {
         debugPrint('[ShikshaPul AI] GPU detection unavailable: $error');
       }
     }
     await _controller!.loadModel(
       modelPath: modelPath,
-      threads: 4,
-      contextSize: 2048,
+      threads: 2,
+      contextSize: 1024,
       gpuLayers: gpuLayers,
     );
 
@@ -213,29 +260,46 @@ class ShikshaPulSwarm {
   static const String defaultModelAsset = 'assets/models/qwen-0.5b-q3_k_m.gguf';
 
   Future<void> initializeBaseModel() async {
-    if (_initialized) return;
+    if (_llama.isLoaded) return;
     if (_initialization != null) return _initialization!;
-    _initialization = _initialize();
-    return _initialization!;
+    final operation = _initialize();
+    _initialization = operation;
+    try {
+      await operation;
+    } finally {
+      _initialization = null;
+    }
   }
 
   Future<void> _initialize() async {
     final loaded = await _llama.loadModel(defaultModelAsset);
-    _initialized = true;
-    if (!loaded) _initialization = null;
+    _initialized = loaded;
     debugPrint(loaded
         ? '[ShikshaPul AI] Local Qwen engine active'
         : '[ShikshaPul AI] Knowledge engine active (${_llama.lastError})');
   }
 
   bool get isRealModelLoaded => _llama.isLoaded;
-  bool get isInitializing => !_initialized && _initialization != null;
+  bool get isInitializing => _initialization != null;
   bool get isReady => _initialized;
   String get modelError => _llama.lastError;
   List<ChatMessage> get chatHistory => List.unmodifiable(_chatHistory);
 
   void clearHistory() => _chatHistory.clear();
   Future<void> stopGeneration() => _llama.stop();
+  Future<bool> checkAdvancedModelSupport() => _llama.supportsAdvancedModel();
+
+  Future<void> releaseModel() async {
+    final loading = _initialization;
+    if (loading != null) {
+      try {
+        await loading;
+      } catch (_) {}
+    }
+    await _llama.stop();
+    await _llama.unload();
+    _initialized = false;
+  }
 
   Stream<ChatMessage> chat(
     String userMessage, {
@@ -243,10 +307,6 @@ class ShikshaPulSwarm {
     String? topicId,
     CourseProfile? course,
   }) async* {
-    if (!_initialized) {
-      await initializeBaseModel();
-    }
-
     // 1. User message
     final userMsg = ChatMessage(
       id: 'user_${DateTime.now().millisecondsSinceEpoch}',
@@ -295,7 +355,12 @@ class ShikshaPulSwarm {
       }
     }
     if (buffer.trim().isEmpty) {
-      buffer = _generateKnowledgeResponse(userMessage, subject, topicId);
+      buffer = _generateKnowledgeResponse(
+        userMessage,
+        subject,
+        topicId,
+        course,
+      );
       aiMsg = aiMsg.copyWith(text: buffer, isStreaming: true);
       yield aiMsg;
     }
@@ -440,32 +505,66 @@ Consistency with this process can improve your probability of passing and compet
 
   // ──────────────────── KNOWLEDGE FALLBACK ────────────────────
   String _generateKnowledgeResponse(
-      String query, SubjectDomain? subject, String? topicId) {
+    String query,
+    SubjectDomain? subject,
+    String? topicId,
+    CourseProfile? course,
+  ) {
     final lowerQuery = query.toLowerCase();
 
     if (_isGreeting(lowerQuery)) return _greetingResponse(subject);
 
-    final searchSubject = subject ?? SubjectDomain.physics;
-    final topics = SyllabusTree.getAllTopics(searchSubject);
-
+    var searchSubject = subject ?? SubjectDomain.physics;
     SyllabusNode? matchedTopic;
     int bestScore = 0;
 
-    for (final topic in topics) {
-      int score = 0;
-      for (final keyword in topic.keywords) {
-        if (lowerQuery.contains(keyword.toLowerCase())) {
-          score += keyword.length * 2;
+    // Lite Tutor searches the complete local syllabus, not only the currently
+    // selected chip. This keeps Physics, Chemistry, Mathematics and Biology
+    // useful without loading a language model or requiring internet access.
+    for (final candidateSubject in SubjectDomain.values) {
+      for (final topic in SyllabusTree.getAllTopics(candidateSubject)) {
+        var score = 0;
+        if (lowerQuery.contains(topic.nameEn.toLowerCase())) score += 80;
+        for (final keyword in topic.keywords) {
+          if (lowerQuery.contains(keyword.toLowerCase())) {
+            score += keyword.length * 2;
+          }
         }
-      }
-      if (topic.id == topicId) score += 100;
-      if (score > bestScore) {
-        bestScore = score;
-        matchedTopic = topic;
+        if (topic.id == topicId) score += 100;
+        if (score > 0 && candidateSubject == subject) score += 3;
+        if (score > bestScore) {
+          bestScore = score;
+          matchedTopic = topic;
+          searchSubject = candidateSubject;
+        }
       }
     }
 
     if (matchedTopic != null && bestScore > 0) {
+      if (RegExp(r'\b(practice|quiz|mcq|question)\b').hasMatch(lowerQuery)) {
+        final question = QuestionEngine.generateSingle(
+          matchedTopic.id,
+          course?.type ?? ExamType.ioe,
+        );
+        final options = question.options
+            .asMap()
+            .entries
+            .map((entry) =>
+                '${String.fromCharCode(65 + entry.key)}. ${entry.value}')
+            .join('\n');
+        final correctLetter = String.fromCharCode(65 + question.correctIndex);
+        return '''**${question.trustLabel} — ${question.topicName}**
+
+${question.text}
+
+$options
+
+**Answer:** $correctLetter. ${question.options[question.correctIndex]}
+
+**Why:** ${question.explanation}
+
+Source label: ${question.sourceLabel}''';
+      }
       return _buildConversationalExplanation(
           matchedTopic, searchSubject, query);
     }
@@ -528,7 +627,7 @@ Want me to walk through a specific problem, or should we try some practice quest
     String? explanation = explanations[topic.id];
     if (explanation != null) return explanation;
 
-    return """Great question about **${topic.nameEn}**! 
+    return """Great question about **${topic.nameEn}**!
 
 This is a ${topic.difficulty < 0.5 ? 'fundamental' : topic.difficulty < 0.7 ? 'intermediate' : 'advanced'} topic for Nepal entrance exams.
 

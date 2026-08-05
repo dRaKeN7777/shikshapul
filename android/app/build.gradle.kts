@@ -29,6 +29,11 @@ android {
     compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
+    buildFeatures {
+        buildConfig = true
+        resValues = true
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -43,6 +48,32 @@ android {
         
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+    }
+
+    flavorDimensions += "modelTier"
+    productFlavors {
+        create("lite") {
+            dimension = "modelTier"
+            resValue("string", "app_name", "ShikshaPul")
+            ndk {
+                // M11/M12 variants can run a 32-bit userspace even when the
+                // chipset is 64-bit. Lite ships both common phone ABIs.
+                abiFilters += listOf("armeabi-v7a", "arm64-v8a")
+            }
+        }
+        create("full") {
+            dimension = "modelTier"
+            applicationIdSuffix = ".fullai"
+            versionNameSuffix = "-fullai"
+            resValue("string", "app_name", "ShikshaPul Full AI")
+        }
+    }
+
+    // Only the Full-AI flavor receives the large model. It is deliberately a
+    // native Android asset so Kotlin can stream it to disk without a 412 MB
+    // Dart heap allocation.
+    sourceSets {
+        getByName("full").assets.srcDir("../../assets")
     }
 
     signingConfigs {
