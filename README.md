@@ -15,6 +15,14 @@ separated institutional model sets. Commercial EPCM material is not copied;
 students may use an authorized copy alongside the app and record mistakes in
 the Mistake Notebook.
 
+## Download for Android
+
+The signed ShikshaPul v1.0.1 APK is available from the
+[Nepal release page](https://github.com/dRaKeN7777/shikshapul/releases/tag/v1.0.1).
+It supports Android 8.0/API 26 or newer and can be used fully offline after
+installation. Google Play testing is also active for invited accounts while
+the mandatory production-access testing period is completed.
+
 ## Requirements
 
 - Flutter 3.44 or newer (Dart 3.3+)
