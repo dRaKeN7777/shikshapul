@@ -1,4 +1,4 @@
-package com.shikshapul.app.shikshapul_entrance
+package com.logicbuilder8.shikshapulprep
 
 import android.app.ActivityManager
 import android.content.Context

@@ -24,7 +24,7 @@ if (releaseRequested && !keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.shikshapul.app.shikshapul_entrance"
+    namespace = "com.logicbuilder8.shikshapulprep"
     
     compileSdk = 36
     ndkVersion = flutter.ndkVersion
@@ -40,7 +40,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.shikshapul.app.shikshapul_entrance"
+        applicationId = "com.logicbuilder8.shikshapulprep"
         
         // Native offline llama.cpp uses Android SharedMemory (API 26+).
         minSdk = 26
