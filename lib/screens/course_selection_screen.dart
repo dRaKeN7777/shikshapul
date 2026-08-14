@@ -23,20 +23,68 @@ class CourseSelectionScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 20),
-                const Text(
-                  "ShikshaPul",
-                  style: TextStyle(
-                    fontSize: 42,
-                    fontWeight: FontWeight.w900,
-                    color: Color(0xFF38BDF8),
-                    letterSpacing: 1.5,
+                Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(18),
+                      child: Image.asset(
+                        'assets/branding/shikshapul_logo.png',
+                        width: 74,
+                        height: 74,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "ShikshaPul",
+                            style: TextStyle(
+                              fontSize: 34,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF38BDF8),
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                          Text(
+                            "Offline entrance preparation students can trust",
+                            style:
+                                TextStyle(fontSize: 14, color: Colors.white70),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F2942),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                        color: const Color(0xFF38BDF8).withValues(alpha: .25)),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.shield_outlined,
+                          color: Color(0xFF10B981), size: 20),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          "Private by design • No account required • Progress stays on this device",
+                          style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.white70,
+                              height: 1.35),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const Text(
-                  "Nepal's Offline AI Entrance Engine",
-                  style: TextStyle(fontSize: 16, color: Colors.grey),
-                ),
-                const SizedBox(height: 40),
+                const SizedBox(height: 28),
                 const Text(
                   "SELECT YOUR EXAM",
                   style: TextStyle(

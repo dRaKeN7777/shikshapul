@@ -29,6 +29,7 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
+    - assets/branding/shikshapul_logo.png
     # Keep the 412 MB GGUF out of the default Lite APK. The Full-AI Android
     # flavor adds it as a native streaming asset; both flavors retain metadata.
     - assets/models/model_manifest.json
