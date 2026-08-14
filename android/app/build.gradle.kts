@@ -16,6 +16,12 @@ if (keystorePropertiesFile.exists()) {
 val releaseRequested = gradle.startParameter.taskNames.any {
     it.contains("release", ignoreCase = true)
 }
+val fullBundleRequested = gradle.startParameter.taskNames.any {
+    it.contains("bundleFull", ignoreCase = true)
+}
+val fullApkRequested = gradle.startParameter.taskNames.any {
+    it.contains("assembleFull", ignoreCase = true)
+}
 if (releaseRequested && !keystorePropertiesFile.exists()) {
     throw GradleException(
         "Release signing is not configured. Create android/key.properties; " +
@@ -63,17 +69,35 @@ android {
         }
         create("full") {
             dimension = "modelTier"
-            applicationIdSuffix = ".fullai"
-            versionNameSuffix = "-fullai"
-            resValue("string", "app_name", "ShikshaPul Full AI")
+            // Full AI updates the same Play listing and installed application.
+            // The Lite/Full distinction is a release packaging choice, not a
+            // separate product identity.
+            resValue("string", "app_name", "ShikshaPul")
+            ndk {
+                // llama_flutter_android publishes its inference libraries for
+                // ARM64. Do not offer Full AI to unsupported 32-bit/x86 phones;
+                // those devices remain supported by the Lite release.
+                abiFilters += listOf("arm64-v8a")
+            }
         }
     }
 
-    // Only the Full-AI flavor receives the large model. It is deliberately a
-    // native Android asset so Kotlin can stream it to disk without a 412 MB
-    // Dart heap allocation.
-    sourceSets {
-        getByName("full").assets.srcDir("../../assets")
+    // Google Play delivers the 412 MB model as an install-time asset pack so
+    // it does not exceed the base-module size limit. A standalone Full APK
+    // still embeds the same asset for direct/offline device testing.
+    if (fullBundleRequested) {
+        assetPacks += listOf(":qwen_model")
+    }
+    if (fullApkRequested) {
+        sourceSets.getByName("full").assets.srcDir("../../assets")
+    }
+    if (fullBundleRequested || fullApkRequested) {
+        packaging {
+            jniLibs.excludes += setOf(
+                "lib/armeabi-v7a/**",
+                "lib/x86_64/**",
+            )
+        }
     }
 
     signingConfigs {

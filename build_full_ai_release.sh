@@ -1,7 +1,7 @@
 #!/bin/zsh
 set -euo pipefail
 
-project_dir="/Users/draken/Downloads/shikshapul_entrance"
+project_dir="$(cd "$(dirname "$0")" && pwd)"
 java_runtime="/opt/homebrew/Cellar/openjdk@17/17.0.20/libexec/openjdk.jdk/Contents/Home"
 apk_signer="/opt/homebrew/share/android-commandlinetools/build-tools/36.0.0/apksigner"
 apk_path="$project_dir/build/app/outputs/flutter-apk/app-full-release.apk"
@@ -24,10 +24,11 @@ fi
 export JAVA_HOME="$java_runtime"
 
 flutter pub get
+./tool/download_qwen_model.sh
 dart format --output=none --set-exit-if-changed lib test
 flutter analyze
 flutter test
-flutter build apk --release --flavor full
+flutter build apk --release --flavor full --target-platform android-arm64
 
 "$apk_signer" verify --verbose --print-certs "$apk_path"
 shasum -a 256 "$apk_path" | tee "$apk_path.sha256"

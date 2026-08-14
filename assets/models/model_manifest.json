@@ -4,11 +4,11 @@
   "detected_architecture": "qwen2",
   "detected_model_name": "qwen2.5-0.5b-instruct",
   "quantization_hint": "Q3_K_M",
-  "base_source": "UNRECORDED",
-  "base_license": "UNRECORDED",
-  "adapter_merge": "NONE_RECORDED",
+  "base_source": "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF",
+  "base_license": "Apache-2.0",
+  "adapter_merge": "NONE",
   "evaluation_report": "NOT_AVAILABLE",
   "expert_sign_off": "NOT_AVAILABLE",
-  "deployment_status": "DEVELOPMENT_ONLY",
-  "note": "Do not describe this model as exam-verified until provenance, licensing, held-out evaluation, and expert sign-off are recorded."
+  "deployment_status": "FULL_AI_RELEASE_ASSET",
+  "note": "Official Qwen GGUF artifact. It remains a general study aid and must not be described as exam-verified until held-out evaluation and expert sign-off are recorded."
 }

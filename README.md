@@ -56,9 +56,12 @@ certificate verification, and SHA-256 generation. It contains the complete
 exam simulator and Lite Tutor without the large model.
 
 Build the separately installable high-memory edition with
-`flutter build apk --release --flavor full`, or run
-`./build_full_ai_release.sh`. For Google Play, build the corresponding signed
-bundle with `flutter build appbundle --release --flavor lite`.
+`flutter build apk --release --flavor full --target-platform android-arm64`, or run
+`./build_full_ai_release.sh`. Run `./tool/download_qwen_model.sh` first to
+download and SHA-256 verify the official Apache-2.0 Qwen2.5 0.5B Q3_K_M GGUF.
+For Google Play, `flutter build appbundle --release --flavor full --target-platform android-arm64` places the
+model in an install-time Play Asset Delivery pack while keeping the base module
+within Play's size limit.
 
 Build an unsigned iOS archive with `flutter build ios --release --no-codesign`.
 For App Store or device distribution, open `ios/Runner.xcworkspace` in Xcode,

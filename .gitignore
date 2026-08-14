@@ -45,6 +45,8 @@ app.*.map.json
 
 # Large local AI model assets
 assets/models/*.gguf
+android/build/
+android/.kotlin/
 
 # Signing secrets and generated training data
 /android/key.properties
